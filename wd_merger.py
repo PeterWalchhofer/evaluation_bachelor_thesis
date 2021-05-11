@@ -10,59 +10,82 @@ from followthemoney.dedupe import Match
 from followthemoney.cli.cli import cli
 from followthemoney.cli.util import read_entities, write_object
 from followthemoney.exc import InvalidData
-from os.path import dirname
+from os.path import dirname, join
+import logging
+import os
 
-# Matching file persists match objects
-MATCHES_FILE_NAME = "matches.json.temp"
-# Merged file oersits entities with unified IDs, but entails duplicates.
-MERGED_FILE_NAME = "matched_unaggr.json.temp"
+log = logging.getLogger(__name__)
 
 
 @click.group()
 def cli():
     pass
 
+def getJsons(path):
+    return [file for file in os.listdir(path) if file.endswith("json")]
 
-@cli.command("match-wd", help="Match items with common Wikidata ID")
-@click.option("-f", "--first", type=click.File("r"), required=True)  
-@click.option("-s", "--second", type=click.File("r"), required=True) 
-@click.option("-o", "--outfile", type=click.File("w"), required=True) 
+@cli.command("id-match", help="Match items with common identifier")
+@click.option("-i", "--path",
+              type=click.Path(exists=True, file_okay=False),
+              required=True,
+              help="Path containing one or more FtM files in json.", default="-")
+@click.option("-m", "--matchfile", type=click.File("w"), required=False , help="Optional match file name", default="-")
 @click.option("-p", "--property", required=False, help="Property to match on. Leave empty when matching on all identifiers.")  # noqa
-@click.pass_context
-def match_wd(ctx, first, second, outfile, property):
+def match_on_id(path, matchfile, property):
     buffer = {}
 
     if property and not any(property == prop.name for prop in model.properties):
         raise InvalidData(f"Property '{property}' not in model")
 
     try:
-        matches = generate_matches(buffer, first, property)
-        matches.extend(generate_matches(buffer, second, property))
-        click.echo(f"Found {len(matches)} matches")
+        matches = []
+        for file in getJsons(path):
+            stream = open(join(path, file), "r")
+            matches.extend(generate_matches(buffer, stream, property))
+
+        log.info(f"Found {len(matches)} matches")
 
         if len(matches) == 0:
             return
 
-        matchfile = open(dirname(outfile.name) + f"/{MATCHES_FILE_NAME}", "w")
+        
         for match in matches:
             write_object(matchfile, match)
 
-        # Pipe to other CLI scripts.
-        merged_id_file_out = open(dirname(outfile.name) + f"/{MERGED_FILE_NAME}", "w")
-    
-        ctx.invoke(dedupe.link, infile=open(first.name),
-                   outfile=merged_id_file_out, matches=open(matchfile.name))
-        ctx.invoke(dedupe.link, infile=open(second.name),
-                   outfile=merged_id_file_out, matches=open(matchfile.name))
-
-        
-        merged_id_file_in = open(merged_id_file_out.name)
-        ctx.invoke(aggregate.aggregate,
-                   infile=merged_id_file_in, outfile=outfile)
+       
     except BrokenPipeError:
         raise click.Abort()
 
 
+@cli.command("merger", help="Merge items from path and mapfile")
+@click.option("-i", "--path",
+              type=click.Path(exists=True, file_okay=False),
+              required=True,
+              help="Path containing one or more FtM files in json.")
+@click.option("-m", "--matchfile", type=click.File("r") , help="Match file", default="-")
+@click.option("-o", "--outfile", type=click.File("w"), help="Match file", default="-")
+def unify_id(path, matchfile, outfile):
+    try:
+        linker = Linker(model)
+        
+        for match in Match.from_file(model, matchfile):
+            linker.add(match)
+
+        log.info("Linker: %s clusters.", len(linker.lookup))
+
+        for file in getJsons(path):
+            link(open(join(path, file), "r"), outfile, linker)
+            
+    except BrokenPipeError:
+        raise click.Abort()
+
+
+def link(infile, outfile, linker):
+    # Similar to https://github.com/alephdata/followthemoney/blob/master/followthemoney/cli/dedupe.py
+
+    for entity in read_entities(infile):
+        entity = linker.apply(entity)
+        write_object(outfile, entity)
 
 def generate_matches(buffer, infile, on):
     matches = []
@@ -97,7 +120,7 @@ def make_match(entity, other):
         model.common_schema(entity.schema, other.schema)
     except InvalidData:
         # Do not match unmatchable types.
-        click.echo(
+        log.warning(
             f"Warning: Entity '{entity.id}'' and '{other.id}' cannot be matched. Incompatible types <{entity.schema.name}, {other.schema.name}>")
         return
 
