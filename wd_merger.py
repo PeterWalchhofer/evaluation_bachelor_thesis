@@ -12,9 +12,9 @@ from followthemoney.cli.util import read_entities, write_object
 from followthemoney.exc import InvalidData
 from os.path import dirname
 
-# matching file contains match objects
+# Matching file persists match objects
 MATCHES_FILE_NAME = "matches.json.temp"
-# merged file has unified IDs, but duplicates
+# Merged file oersits entities with unified IDs, but entails duplicates.
 MERGED_FILE_NAME = "matched_unaggr.json.temp"
 
 
@@ -24,13 +24,16 @@ def cli():
 
 
 @cli.command("match-wd", help="Match items with common Wikidata ID")
-@click.option("-f", "--first", type=click.File("r"), required=True)  # noqa
-@click.option("-s", "--second", type=click.File("r"), required=True)  # noqa
-@click.option("-o", "--outfile", type=click.File("w"), required=True)  # noqa
+@click.option("-f", "--first", type=click.File("r"), required=True)  
+@click.option("-s", "--second", type=click.File("r"), required=True) 
+@click.option("-o", "--outfile", type=click.File("w"), required=True) 
 @click.option("-p", "--property", required=False, help="Property to match on. Leave empty when matching on all identifiers.")  # noqa
 @click.pass_context
 def match_wd(ctx, first, second, outfile, property):
     buffer = {}
+
+    if property and not any(property == prop.name for prop in model.properties):
+        raise InvalidData(f"Property '{property}' not in model")
 
     try:
         matches = generate_matches(buffer, first, property)
@@ -44,13 +47,15 @@ def match_wd(ctx, first, second, outfile, property):
         for match in matches:
             write_object(matchfile, match)
 
-        merged_id_file_out = open(
-            dirname(outfile.name) + f"/{MERGED_FILE_NAME}", "w")
+        # Pipe to other CLI scripts.
+        merged_id_file_out = open(dirname(outfile.name) + f"/{MERGED_FILE_NAME}", "w")
+    
         ctx.invoke(dedupe.link, infile=open(first.name),
                    outfile=merged_id_file_out, matches=open(matchfile.name))
         ctx.invoke(dedupe.link, infile=open(second.name),
                    outfile=merged_id_file_out, matches=open(matchfile.name))
 
+        
         merged_id_file_in = open(merged_id_file_out.name)
         ctx.invoke(aggregate.aggregate,
                    infile=merged_id_file_in, outfile=outfile)
@@ -59,20 +64,16 @@ def match_wd(ctx, first, second, outfile, property):
 
 
 
- entity
-    return matches
-
-def generate_matches(buffer, infile,on):
+def generate_matches(buffer, infile, on):
     matches = []
-    
+
     for entity in read_entities(infile):
         props = entity.properties
         if on:
             if entity.has(on, True):
-                props = [on] 
+                props = [on]
             else:
                 continue
-            
 
         for prop in props:
             if entity.schema.properties[prop].type == IdentifierType:
@@ -86,8 +87,7 @@ def generate_matches(buffer, infile,on):
                     not match or matches.append(match)
                 else:
                     buffer[prop][id] = entity
-    
-    
+
     return matches
 
 
@@ -97,13 +97,16 @@ def make_match(entity, other):
         model.common_schema(entity.schema, other.schema)
     except InvalidData:
         # Do not match unmatchable types.
-        return 
-    
+        click.echo(
+            f"Warning: Entity '{entity.id}'' and '{other.id}' cannot be matched. Incompatible types <{entity.schema.name}, {other.schema.name}>")
+        return
+
     match = Match(model, {})
-    match.entity=  entity
-    match.canonical =  other
+    match.entity = entity
+    match.canonical = other
     match.decision = match.SAME
     return match
+
 
 if __name__ == "__main__":
     cli()
