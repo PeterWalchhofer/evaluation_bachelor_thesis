@@ -1,4 +1,3 @@
-import followthemoney as ftm
 from followthemoney.exc import InvalidData
 import click
 from followthemoney.types import IdentifierType
@@ -24,7 +23,7 @@ def cli():
 def getJsons(path):
     return [file for file in os.listdir(path) if file.endswith("json")]
 
-@cli.command("id-match", help="Match items with common identifier")
+@cli.command("pmatch", help="Match items with common identifier")
 @click.option("-i", "--path",
               type=click.Path(exists=True, file_okay=False),
               required=True,
@@ -57,13 +56,13 @@ def match_on_id(path, matchfile, property):
         raise click.Abort()
 
 
-@cli.command("merger", help="Merge items from path and mapfile")
+@cli.command("pmerge", help="Merge items from path and mapfile")
 @click.option("-i", "--path",
               type=click.Path(exists=True, file_okay=False),
               required=True,
               help="Path containing one or more FtM files in json.")
 @click.option("-m", "--matchfile", type=click.File("r") , help="Match file", default="-")
-@click.option("-o", "--outfile", type=click.File("w"), help="Match file", default="-")
+@click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
 def unify_id(path, matchfile, outfile):
     try:
         linker = Linker(model)
