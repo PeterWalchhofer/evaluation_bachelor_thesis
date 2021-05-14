@@ -6,7 +6,6 @@ from followthemoney import model
 from followthemoney.cli import aggregate
 import followthemoney.cli.dedupe as dedupe
 from followthemoney.dedupe import Match
-from followthemoney.cli.cli import cli
 from followthemoney.cli.util import read_entities, write_object
 from followthemoney.exc import InvalidData
 from os.path import dirname, join
@@ -23,17 +22,21 @@ def cli():
 def getJsons(path):
     return [file for file in os.listdir(path) if file.endswith("json")]
 
+def isProperty(property):
+    click.echo([prop.name for prop in model.properties if property == prop.name])
+    return property and any(property == prop.name for prop in model.properties)
+
 @cli.command("pmatch", help="Match items with common identifier")
 @click.option("-i", "--path",
               type=click.Path(exists=True, file_okay=False),
               required=True,
-              help="Path containing one or more FtM files in json.", default="-")
+              help="Path containing one or more FtM files in json.")
 @click.option("-m", "--matchfile", type=click.File("w"), required=False , help="Optional match file name", default="-")
 @click.option("-p", "--property", required=False, help="Property to match on. Leave empty when matching on all identifiers.")  # noqa
 def match_on_id(path, matchfile, property):
     buffer = {}
 
-    if property and not any(property == prop.name for prop in model.properties):
+    if not isProperty(property):
         raise InvalidData(f"Property '{property}' not in model")
 
     try:
@@ -86,6 +89,7 @@ def link(infile, outfile, linker):
         entity = linker.apply(entity)
         write_object(outfile, entity)
 
+
 def generate_matches(buffer, infile, on):
     matches = []
 
@@ -129,6 +133,31 @@ def make_match(entity, other):
     match.decision = match.SAME
     return match
 
+
+@cli.command("extract", help="Extract property values")
+@click.option("-i", "--path",
+              type=click.Path(exists=True, file_okay=False),
+              required=True,
+              help="Path containing one or more FtM files in json")
+@click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
+@click.option("-p", "--property", required=False, help="Property name")
+@click.option("-f", "--first", is_flag=True, help="Take first value?")
+def getPropVals(path, outfile, property, first): 
+    if not isProperty(property):
+        raise InvalidData(f"Property '{property}' not in model")
+
+    for file in getJsons(path):
+        stream = open(join(path, file), "r")
+
+        for entity in read_entities(stream):
+            if first:
+                prop = entity.first(property, quiet=True)
+            else:
+                prop = entity.get(prop, quiet=True)
+
+            if prop:
+                write_object(outfile, prop)
+                
 
 if __name__ == "__main__":
     cli()
