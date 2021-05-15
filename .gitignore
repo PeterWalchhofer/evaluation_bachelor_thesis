@@ -6,3 +6,4 @@ data/output/nb-merge-output/*
 !data/output/nb-merge-output/.gitkeep
 !data/output/cli-merge-output/.gitkeep
 data/output/everypolitician.json
+data/testWorkflow
