@@ -3,12 +3,10 @@ import click
 from followthemoney.types import IdentifierType
 from followthemoney.dedupe import Linker
 from followthemoney import model
-from followthemoney.cli import aggregate
-import followthemoney.cli.dedupe as dedupe
 from followthemoney.dedupe import Match
 from followthemoney.cli.util import read_entities, write_object
 from followthemoney.exc import InvalidData
-from os.path import dirname, join
+from os.path import join
 import logging
 import os
 
@@ -19,19 +17,22 @@ log = logging.getLogger(__name__)
 def cli():
     pass
 
+
 def getJsons(path):
     return [file for file in os.listdir(path) if file.endswith("json")]
+
 
 def isProperty(property):
     click.echo([prop.name for prop in model.properties if property == prop.name])
     return property and any(property == prop.name for prop in model.properties)
+
 
 @cli.command("pmatch", help="Match items with common identifier")
 @click.option("-i", "--path",
               type=click.Path(exists=True, file_okay=False),
               required=True,
               help="Path containing one or more FtM files in json.")
-@click.option("-m", "--matchfile", type=click.File("w"), required=False , help="Optional match file name", default="-")
+@click.option("-m", "--matchfile", type=click.File("w"), required=False, help="Optional match file name", default="-")
 @click.option("-p", "--property", required=False, help="Property to match on. Leave empty when matching on all identifiers.")  # noqa
 def match_on_id(path, matchfile, property):
     buffer = {}
@@ -50,11 +51,9 @@ def match_on_id(path, matchfile, property):
         if len(matches) == 0:
             return
 
-        
         for match in matches:
             write_object(matchfile, match)
 
-       
     except BrokenPipeError:
         raise click.Abort()
 
@@ -64,12 +63,12 @@ def match_on_id(path, matchfile, property):
               type=click.Path(exists=True, file_okay=False),
               required=True,
               help="Path containing one or more FtM files in json.")
-@click.option("-m", "--matchfile", type=click.File("r") , help="Match file", default="-")
+@click.option("-m", "--matchfile", type=click.File("r"), help="Match file", default="-")
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
 def unify_id(path, matchfile, outfile):
     try:
         linker = Linker(model)
-        
+
         for match in Match.from_file(model, matchfile):
             linker.add(match)
 
@@ -77,7 +76,7 @@ def unify_id(path, matchfile, outfile):
 
         for file in getJsons(path):
             link(open(join(path, file), "r"), outfile, linker)
-            
+
     except BrokenPipeError:
         raise click.Abort()
 
@@ -142,7 +141,7 @@ def make_match(entity, other):
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
 @click.option("-p", "--property", required=False, help="Property name")
 @click.option("-f", "--first", is_flag=True, help="Take first value?")
-def getPropVals(path, outfile, property, first): 
+def getPropVals(path, outfile, property, first):
     if not isProperty(property):
         raise InvalidData(f"Property '{property}' not in model")
 
@@ -157,7 +156,7 @@ def getPropVals(path, outfile, property, first):
 
             if prop:
                 write_object(outfile, prop)
-                
+
 
 if __name__ == "__main__":
     cli()
