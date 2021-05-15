@@ -4,11 +4,15 @@ from followthemoney.types import IdentifierType
 from followthemoney.dedupe import Linker
 from followthemoney import model
 from followthemoney.dedupe import Match
-from followthemoney.cli.util import read_entities, write_object
+from followthemoney.cli.util import read_entities, write_object, ensure_list
 from followthemoney.exc import InvalidData
 from os.path import join
+import json
 import logging
 import os
+
+from six import ensure_text
+from . import enricher
 
 log = logging.getLogger(__name__)
 
@@ -19,17 +23,19 @@ def cli():
 
 
 def getJsons(path):
-    return [file for file in os.listdir(path) if file.endswith("json")]
+    if os.path.isfile(path):
+        return [path]
+
+    return [join(path,file) for file in os.listdir(path) if file.endswith("json")]
 
 
 def isProperty(property):
-    click.echo([prop.name for prop in model.properties if property == prop.name])
     return property and any(property == prop.name for prop in model.properties)
 
 
 @cli.command("pmatch", help="Match items with common identifier")
 @click.option("-i", "--path",
-              type=click.Path(exists=True, file_okay=False),
+              type=click.Path(exists=True, file_okay=True),
               required=True,
               help="Path containing one or more FtM files in json.")
 @click.option("-m", "--matchfile", type=click.File("w"), required=False, help="Optional match file name", default="-")
@@ -43,7 +49,7 @@ def match_on_id(path, matchfile, property):
     try:
         matches = []
         for file in getJsons(path):
-            stream = open(join(path, file), "r")
+            stream = open(file, "r")
             matches.extend(generate_matches(buffer, stream, property))
 
         log.info(f"Found {len(matches)} matches")
@@ -60,7 +66,7 @@ def match_on_id(path, matchfile, property):
 
 @cli.command("pmerge", help="Merge items from path and mapfile")
 @click.option("-i", "--path",
-              type=click.Path(exists=True, file_okay=False),
+              type=click.Path(exists=True, file_okay=True),
               required=True,
               help="Path containing one or more FtM files in json.")
 @click.option("-m", "--matchfile", type=click.File("r"), help="Match file", default="-")
@@ -75,7 +81,7 @@ def unify_id(path, matchfile, outfile):
         log.info("Linker: %s clusters.", len(linker.lookup))
 
         for file in getJsons(path):
-            link(open(join(path, file), "r"), outfile, linker)
+            link(open(file, "r"), outfile, linker)
 
     except BrokenPipeError:
         raise click.Abort()
@@ -135,7 +141,7 @@ def make_match(entity, other):
 
 @cli.command("extract", help="Extract property values")
 @click.option("-i", "--path",
-              type=click.Path(exists=True, file_okay=False),
+              type=click.Path(exists=True, file_okay=True),
               required=True,
               help="Path containing one or more FtM files in json")
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
@@ -146,17 +152,51 @@ def getPropVals(path, outfile, property, first):
         raise InvalidData(f"Property '{property}' not in model")
 
     for file in getJsons(path):
-        stream = open(join(path, file), "r")
-
+        stream = open(file, "r")
+       
         for entity in read_entities(stream):
+            prop = None
             if first:
                 prop = entity.first(property, quiet=True)
             else:
-                prop = entity.get(prop, quiet=True)
+                prop = entity.get(property, quiet=True)
 
             if prop:
                 write_object(outfile, prop)
 
+
+
+@cli.command("enrich", help="Enrich")
+@click.option("-i", "--infile",
+              type=click.File("r"),
+              required=True,
+              help="List of wikidata IDs", default = "-")
+@click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
+@click.option("-l", "--lang", help="Language to enrich", default="en")
+def enrich_wd(infile, outfile, lang):
+    ids = set()
+    while True:
+        line = infile.readline()
+        if not line:
+            break
+        wikidataIDs = json.loads(line)
+        ids.update(ensure_list(wikidataIDs))
+      
+    BATCH_SIZE = 50
+    batch = []
+    for id in ids:
+        batch.append(id)
+        if len(batch) >= BATCH_SIZE:
+            batch_query_wd(outfile, lang, batch)
+            batch.clear()
+
+    batch_query_wd(outfile, lang, batch)
+
+def batch_query_wd(outfile, lang, batch):
+    for entity in enricher.get_wd_items(batch, lang): 
+        write_object(outfile, entity)
+      
+    
 
 if __name__ == "__main__":
     cli()
