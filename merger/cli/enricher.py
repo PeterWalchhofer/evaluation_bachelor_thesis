@@ -5,6 +5,10 @@ from qwikidata.linked_data_interface import get_entity_dict_from_api
 from qwikidata.entity import WikidataItem
 from qwikidata.datavalue import *
 import datetime
+import logging
+
+log = logging.getLogger(__name__)
+
 
 SEARCH_ENDPOINT = "https://www.wikidata.org/w/api.php?action=wbgetentities"
 
@@ -96,6 +100,7 @@ def parse_claims(claims, lang):
         wtype = type(datavalue)
 
         if wtype == WikibaseEntityId:
+            # Request to entity to get label.
             qid = datavalue.value["id"]
             label = WikidataItem(get_entity_dict_from_api(qid)).get_label(lang)
             vals.append(label)
@@ -128,6 +133,7 @@ def get_ftm_type(item, prop=P_INSTANCE_OF):
                 return ftm_type
     
     # TODO: Handle nested subclasses (via recursion or SPARQL)
+    # ÖBB <instanceOf> railway company <instanceOf> business is not detected.
 
 
 def parse(id, item_dict, lang, quiet=True):
@@ -144,6 +150,7 @@ def parse(id, item_dict, lang, quiet=True):
 
     if not type:
         if quiet:
+            log.warning(f"Item with id '{id}' not matchable to FtM")
             return
         else: 
             raise Exception(f"Item with id '{id}' not matchable to FtM")
@@ -153,7 +160,7 @@ def parse(id, item_dict, lang, quiet=True):
     entity.add("description",  item.get_description(lang))
     entity.make_id(id)
 
-    # Manually parse, as we want aliases from all languages.
+    # Manually parse, as we want aliases from all languages returned.
     aliases = set()
     for _, item_aliases in item_dict["aliases"].items():
         for alias in item_aliases:
@@ -171,4 +178,4 @@ def parse(id, item_dict, lang, quiet=True):
 
 
 if __name__ == "__main__":
-    get_wd_items(["Q51533040","Q81526090","Q20752545","Q102353097","Q50843964","NaN","Q102353101","Q1703382","Q15792244","Q1384694","Q54962932","Q1802317","Q1618939","Q25991721","Q102353119","Q102353116"], "de")
+    wditems = get_wd_items(["Q51533040","Q81526090","Q20752545","Q102353097","Q50843964","NaN","Q102353101","Q1703382","Q15792244","Q1384694","Q54962932","Q1802317","Q1618939","Q25991721","Q102353119","Q102353116"], "de")

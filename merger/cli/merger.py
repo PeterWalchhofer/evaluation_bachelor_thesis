@@ -10,8 +10,6 @@ from os.path import join
 import json
 import logging
 import os
-
-from six import ensure_text
 from . import enricher
 
 log = logging.getLogger(__name__)
@@ -26,7 +24,7 @@ def getJsons(path):
     if os.path.isfile(path):
         return [path]
 
-    return [join(path,file) for file in os.listdir(path) if file.endswith("json")]
+    return [join(path, file) for file in os.listdir(path) if file.endswith("json")]
 
 
 def isProperty(property):
@@ -153,7 +151,7 @@ def getPropVals(path, outfile, property, first):
 
     for file in getJsons(path):
         stream = open(file, "r")
-       
+
         for entity in read_entities(stream):
             prop = None
             if first:
@@ -165,12 +163,11 @@ def getPropVals(path, outfile, property, first):
                 write_object(outfile, prop)
 
 
-
 @cli.command("enrich", help="Enrich")
 @click.option("-i", "--infile",
               type=click.File("r"),
               required=True,
-              help="List of wikidata IDs", default = "-")
+              help="List of wikidata IDs", default="-")
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
 @click.option("-l", "--lang", help="Language to enrich", default="en")
 def enrich_wd(infile, outfile, lang):
@@ -181,7 +178,7 @@ def enrich_wd(infile, outfile, lang):
             break
         wikidataIDs = json.loads(line)
         ids.update(ensure_list(wikidataIDs))
-      
+
     BATCH_SIZE = 50
     batch = []
     for id in ids:
@@ -192,11 +189,11 @@ def enrich_wd(infile, outfile, lang):
 
     batch_query_wd(outfile, lang, batch)
 
+
 def batch_query_wd(outfile, lang, batch):
-    for entity in enricher.get_wd_items(batch, lang): 
+    for entity in enricher.get_wd_items(batch, lang):
         write_object(outfile, entity)
-      
-    
+
 
 if __name__ == "__main__":
     cli()
