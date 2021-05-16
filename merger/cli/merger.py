@@ -37,11 +37,11 @@ def isProperty(property):
               required=True,
               help="Path containing one or more FtM files in json.")
 @click.option("-m", "--matchfile", type=click.File("w"), required=False, help="Optional match file name", default="-")
-@click.option("-p", "--property", required=False, help="Property to match on. Leave empty when matching on all identifiers.")  # noqa
+@click.option("-p", "--property", required=False, help="Property to match on. Leave empty when matching on all identifiers.")  
 def match_on_id(path, matchfile, property):
     buffer = {}
 
-    if not isProperty(property):
+    if property is not None and not isProperty(property):
         raise InvalidData(f"Property '{property}' not in model")
 
     try:
@@ -86,7 +86,7 @@ def unify_id(path, matchfile, outfile):
 
 
 def link(infile, outfile, linker):
-    # Similar to https://github.com/alephdata/followthemoney/blob/master/followthemoney/cli/dedupe.py
+    # This is similar to https://github.com/alephdata/followthemoney/blob/master/followthemoney/cli/dedupe.py
 
     for entity in read_entities(infile):
         entity = linker.apply(entity)
@@ -141,11 +141,10 @@ def make_match(entity, other):
 @click.option("-i", "--path",
               type=click.Path(exists=True, file_okay=True),
               required=True,
-              help="Path containing one or more FtM files in json")
+              help="Path containing one or more FtM files in json or direct file path.")
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
 @click.option("-p", "--property", required=False, help="Property name")
-@click.option("-f", "--first", is_flag=True, help="Take first value?")
-def getPropVals(path, outfile, property, first):
+def getPropVals(path, outfile, property):
     if not isProperty(property):
         raise InvalidData(f"Property '{property}' not in model")
 
@@ -153,36 +152,22 @@ def getPropVals(path, outfile, property, first):
         stream = open(file, "r")
 
         for entity in read_entities(stream):
-            prop = None
-            if first:
-                prop = entity.first(property, quiet=True)
-            else:
-                prop = entity.get(property, quiet=True)
-
-            if prop:
-                write_object(outfile, prop)
+            if entity.has(property, quiet=True):
+                write_object(outfile, entity)
 
 
-@cli.command("enrich", help="Enrich")
+@cli.command("enrich", help="Enrich a set of entities")
 @click.option("-i", "--infile",
               type=click.File("r"),
               required=True,
-              help="List of wikidata IDs", default="-")
+              help="List of entities with Wikidata IDs", default="-")
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
 @click.option("-l", "--lang", help="Language to enrich", default="en")
 def enrich_wd(infile, outfile, lang):
-    ids = set()
-    while True:
-        line = infile.readline()
-        if not line:
-            break
-        wikidataIDs = json.loads(line)
-        ids.update(ensure_list(wikidataIDs))
-
     BATCH_SIZE = 50
     batch = []
-    for id in ids:
-        batch.append(id)
+    for entity in read_entities(infile):
+        batch.append(entity)
         if len(batch) >= BATCH_SIZE:
             batch_query_wd(outfile, lang, batch)
             batch.clear()

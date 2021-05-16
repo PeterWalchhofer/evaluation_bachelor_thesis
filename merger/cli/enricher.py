@@ -58,13 +58,13 @@ type_mapping = {
     "Q43229": "Organization",
     "Q3778211": "LegalEntity",
     "Q783794": "Company",  # Company
-    "Q4830453": "Company", # Business
+    "Q4830453": "Company",  # Business
     "Q2659904": "PublicBody"
 }
 
 
 def query_ids(ids, lang):
-    
+
     params = {
         "ids": "|".join(ids),
         "language": lang,
@@ -76,24 +76,34 @@ def query_ids(ids, lang):
     return dicts.get("entities") or {}
 
 
-def get_wd_items(ids, lang):
-    ids = set([id for id in ids if id.startswith("Q")])
+def get_wd_items(entities, lang, quiet=True):
+    entitymap = {}
+    for entity in entities:
+        wd = entity.first("wikidataId", quiet)
+        if wd and wd.startswith("Q"):
+            entitymap[wd] = entity
+
+
+    ids = entitymap.keys()
     wd = query_ids(ids, lang)
     ftm_entities = []
     for id, item in wd.items():
-        entity = parse(id, item, lang)
-        ftm_entities.append(entity)
-    return ftm_entities  
+        entity = parse(id, item, entitymap[id].schema.name, lang, quiet)
+        if entity:
+            ftm_entities.append(entity)
+    return ftm_entities
 
 
-def get_mapping(type):
+def get_prop_mapping(type):
+    """This handles type inheritances of the FtM model by merging the mapping objects of each supertype."""
     mapping = {}
     for schema in model.schemata.get(type).schemata:
-        mapping |= prop_mapping[schema.name]
+        mapping |= prop_mapping.get(schema.name, {})
     return mapping
 
 
 def parse_claims(claims, lang):
+    """Here, property claims/statements are are parsed."""
     vals = []
     for claim in claims:
         datavalue = claim.mainsnak.datavalue
@@ -120,53 +130,33 @@ def parse_claims(claims, lang):
     return vals
 
 
-def get_ftm_type(item, prop=P_INSTANCE_OF):
-    instance_ofs = item.get_truthy_claim_group(
-        prop)
-
-    for instance_of in instance_ofs:
-        datavalue = instance_of.mainsnak.datavalue
-        if type(datavalue) == WikibaseEntityId:
-            id = datavalue.value["id"]
-            ftm_type = type_mapping.get(id)
-            if ftm_type:
-                return ftm_type
-    
-    # TODO: Handle nested subclasses (via recursion or SPARQL)
-    # ÖBB <instanceOf> railway company <instanceOf> business is not detected.
+def parse_aliases(item_dict):
+    # Manually parse, as we want aliases from all languages returned.
+    aliases = set()
+    for _, item_aliases in item_dict["aliases"].items():
+        for alias in item_aliases:
+            aliases.add(alias["value"])
+    return aliases
 
 
-def parse(id, item_dict, lang, quiet=True):
-    """
-     "Truthy statements represent statements that have the best non-deprecated rank for a
-            given property. Namely, if there is a preferred statement for a property P, then only
-            preferred statements for P will be considered truthy. Otherwise, all normal-rank
-            statements for P are considered truthy."
-            https://github.com/kensho-technologies/qwikidata/blob/8438c887c2875973e261e5dede13a0b7bf951e41/qwikidata/entity.py#L170
-    """
-
+def parse(id, item_dict, type, lang, quiet=True):
     item = WikidataItem(item_dict)
-    type = get_ftm_type(item)
 
     if not type:
         if quiet:
             log.warning(f"Item with id '{id}' not matchable to FtM")
             return
-        else: 
+        else:
             raise Exception(f"Item with id '{id}' not matchable to FtM")
 
     entity = model.make_entity(type)
     entity.add("name", item.get_label(lang))
     entity.add("description",  item.get_description(lang))
     entity.make_id(id)
+    entity.add("alias", parse_aliases(item_dict))
+    entity.add("wikidataId", id)
 
-    # Manually parse, as we want aliases from all languages returned.
-    aliases = set()
-    for _, item_aliases in item_dict["aliases"].items():
-        for alias in item_aliases:
-            aliases.add(alias["value"])
-
-    mapping = get_mapping(type)
+    mapping = get_prop_mapping(type)
 
     for pid, ftm_prop in mapping.items():
         claim_group = item.get_truthy_claim_group(pid)
@@ -175,7 +165,3 @@ def parse(id, item_dict, lang, quiet=True):
             entity.add(ftm_prop, prop_vals)
 
     return entity
-
-
-if __name__ == "__main__":
-    wditems = get_wd_items(["Q51533040","Q81526090","Q20752545","Q102353097","Q50843964","NaN","Q102353101","Q1703382","Q15792244","Q1384694","Q54962932","Q1802317","Q1618939","Q25991721","Q102353119","Q102353116"], "de")
