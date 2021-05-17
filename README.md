@@ -8,8 +8,8 @@ conda env create -f environment.yml
 ## Evaluation
 In this repository, the notebook `Analysis.ipynb` computes the numbers for the evaluation section of my bachelor thesis.
 Also, the `Merge.ipynb` explains the merging and enrichment logic that is incorporated into the CLI `merger` tool, which can be found in the `./merger` directory. 
-The code was written with replicability in mind. Therefore, it is not necessary to run an instance of Aleph along with the scripts.
-The `TestWorkflow.ipynb` can be used for going through the reconciliation -> download -> (enrich) -> match -> merge process.
+The code was written with replicability in mind. Therefore, it is not necessary to run an instance of [Aleph](https://github.com/alephdata/aleph) along with the scripts.
+The `TestWorkflow.ipynb` can be used for going through the process presented in the thesis on a live instance of Aleph.
 The `ontology mapping.xlsx` documents the mapping decisions between FtM and Wikidata.
 
 ## Scraper
