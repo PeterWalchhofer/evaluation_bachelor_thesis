@@ -86,7 +86,7 @@ def get_wd_items(entities, lang, quiet=True):
             entitymap[wd] = entity
 
     ids = entitymap.keys()
-    
+
     if len(ids) > API_LIMIT:
         raise ValueError("Can only handle max {API_LIMIT} ids.")
 

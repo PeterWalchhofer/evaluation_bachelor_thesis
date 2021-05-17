@@ -35,7 +35,7 @@ def isProperty(property):
 @click.option("-i", "--path",
               type=click.Path(exists=True, file_okay=True),
               required=True,
-              help="Path containing one or more FtM files in json.")
+              help="Path to directory or file of JSON FtM entities")
 @click.option("-m", "--matchfile", type=click.File("w"), required=False, help="Optional match file name", default="-")
 @click.option("-p", "--property", required=False, help="Property to match on. Leave empty when matching on all identifiers.")  
 def match_on_id(path, matchfile, property):
@@ -66,7 +66,7 @@ def match_on_id(path, matchfile, property):
 @click.option("-i", "--path",
               type=click.Path(exists=True, file_okay=True),
               required=True,
-              help="Path containing one or more FtM files in json.")
+              help="Path to directory or file of JSON FtM entities")
 @click.option("-m", "--matchfile", type=click.File("r"), help="Match file", default="-")
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
 def unify_id(path, matchfile, outfile):
@@ -141,7 +141,7 @@ def make_match(entity, other):
 @click.option("-i", "--path",
               type=click.Path(exists=True, file_okay=True),
               required=True,
-              help="Path containing one or more FtM files in json or direct file path.")
+              help="Path to directory or file of JSON FtM entities")
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
 @click.option("-p", "--property", required=False, help="Property name")
 def getPropVals(path, outfile, property):
@@ -156,13 +156,13 @@ def getPropVals(path, outfile, property):
                 write_object(outfile, entity)
 
 
-@cli.command("enrich", help="Enrich a set of entities")
+@cli.command("enrich", help="Enrich a set of entities using Wikidata")
 @click.option("-i", "--infile",
               type=click.File("r"),
               required=True,
               help="FtM entities with Wikidata IDs", default="-")
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
-@click.option("-l", "--lang", help="Language to enrich", default="en")
+@click.option("-l", "--lang", help="Language to enrich. Default: 'en'", default="en")
 def enrich_wd(infile, outfile, lang):
     batch = []
     for entity in read_entities(infile):
