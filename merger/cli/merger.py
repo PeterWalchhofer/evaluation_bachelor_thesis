@@ -121,7 +121,7 @@ def generate_matches(buffer, infile, on):
 
 
 def make_match(entity, other):
-    # similar to https://github.com/alephdata/followthemoney/blob/master/enrich/followthemoney_enrich/enricher.py
+    # This is similar to https://github.com/alephdata/followthemoney/blob/master/enrich/followthemoney_enrich/enricher.py
     try:
         model.common_schema(entity.schema, other.schema)
     except InvalidData:
@@ -160,15 +160,14 @@ def getPropVals(path, outfile, property):
 @click.option("-i", "--infile",
               type=click.File("r"),
               required=True,
-              help="List of entities with Wikidata IDs", default="-")
+              help="FtM entities with Wikidata IDs", default="-")
 @click.option("-o", "--outfile", type=click.File("w"), help="Output file", default="-")
 @click.option("-l", "--lang", help="Language to enrich", default="en")
 def enrich_wd(infile, outfile, lang):
-    BATCH_SIZE = 50
     batch = []
     for entity in read_entities(infile):
         batch.append(entity)
-        if len(batch) >= BATCH_SIZE:
+        if len(batch) >= enricher.API_LIMIT:
             batch_query_wd(outfile, lang, batch)
             batch.clear()
 

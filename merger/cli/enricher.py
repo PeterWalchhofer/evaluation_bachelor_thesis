@@ -11,9 +11,11 @@ log = logging.getLogger(__name__)
 
 
 SEARCH_ENDPOINT = "https://www.wikidata.org/w/api.php?action=wbgetentities"
-
+API_LIMIT = 50
 P_INSTANCE_OF = "P31"
 P_SUBCLASS_OF = "P279"
+
+CACHE = {}
 
 prop_mapping = {
     "Person": {
@@ -83,12 +85,16 @@ def get_wd_items(entities, lang, quiet=True):
         if wd and wd.startswith("Q"):
             entitymap[wd] = entity
 
-
     ids = entitymap.keys()
+    
+    if len(ids) > API_LIMIT:
+        raise ValueError("Can only handle max {API_LIMIT} ids.")
+
     wd = query_ids(ids, lang)
     ftm_entities = []
     for id, item in wd.items():
-        entity = parse(id, item, entitymap[id].schema.name, lang, quiet)
+        schema = entitymap[id].schema.name
+        entity = parse(id, item, schema, lang, quiet)
         if entity:
             ftm_entities.append(entity)
     return ftm_entities
@@ -112,8 +118,13 @@ def parse_claims(claims, lang):
         if wtype == WikibaseEntityId:
             # Request to entity to get label.
             qid = datavalue.value["id"]
-            label = WikidataItem(get_entity_dict_from_api(qid)).get_label(lang)
-            vals.append(label)
+            if qid in CACHE:
+                vals.append(CACHE[qid])
+            else:
+                label = WikidataItem(
+                    get_entity_dict_from_api(qid)).get_label(lang)
+                vals.append(label)
+                CACHE[qid] = label
         elif wtype == String:
             vals.append(datavalue.value)
         elif wtype == MonolingualText:
